@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Currency Converter</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <h1>Currency Converter</h1>
+    <form id="currency-form">
+        <label for="amount">Amount:</label>
+        <input type="number" id="amount" required>
+
+        <label for="fromCurrency">From Currency:</label>
+        <select id="fromCurrency" required>
+            <option value="USD">USD (USA)</option>
+            <option value="EUR">EUR (Europe)</option>
+            <option value="INR">INR (India)</option>
+            <option value="JPY">JPY (Japan)</option>
+            <!-- Add more options as needed -->
+        </select>
+
+        <label for="toCurrency">To Currency:</label>
+        <select id="toCurrency" required>
+            <option value="USD">USD (USA)</option>
+            <option value="EUR">EUR (Europe)</option>
+            <option value="INR">INR (India)</option>
+            <option value="JPY">JPY (Japan)</option>
+            <!-- Add more options as needed -->
+        </select>
+
+        <button type="submit" id="convert-button">Convert</button>
+        <button type="button" id="add-button">Add to eWallet</button>
+    </form>
+
+    <h2>Converted Amount: <span id="convertedAmount"></span></h2>
+
+    <!-- eWallet Button and Window -->
+    <div id="ewallet-container">
+        <button id="ewallet-button">eWallet</button>
+        <div id="ewallet-window">
+            <h3>eWallet</h3>
+            <p>Your Balance: <span id="ewallet-balance">0</span> <span id="ewallet-currency">USD</span></p>
+            <button id="withdraw-button">Withdraw</button>
+            <input type="number" id="withdraw-amount" placeholder="Amount to withdraw">
+            <button id="reset-button">Reset Balance</button>
+            <h4>Transaction History</h4>
+            <ul id="ewallet-history">
+                <!-- History items will be dynamically added here -->
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        let walletBalance = 0;
+        let walletCurrency = 'USD';  // Initialize with default currency
+        let originalCurrency = 'USD'; // Track the original currency
+        let history = [];
+
+        document.getElementById('currency-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const amount = document.getElementById('amount').value;
+            const fromCurrency = document.getElementById('fromCurrency').value;
+            const toCurrency = document.getElementById('toCurrency').value;
+
+            const url = `https://fast-currency-convertor.p.rapidapi.com/api/Fetch-Currency/?amount=${amount}&fromCurrency=${fromCurrency}&toCurrency=${toCurrency}`;
+            const options = {
+                method: 'GET',
+                headers: {
+                    'x-rapidapi-key': '5a27b56f09msh98bca7eab65d29fp1a3a19jsn43275f875551',
+                    'x-rapidapi-host': 'fast-currency-convertor.p.rapidapi.com'
+                }
+            };
+
+            try {
+                const response = await fetch(url, options);
+                const result = await response.json();  // Assuming the response is JSON
+
+                if (result.status) {
+                    const convertedAmount = parseFloat(result.value.replace(/,/g, '')); // Remove commas
+                    document.getElementById('convertedAmount').textContent = `${convertedAmount.toFixed(2)} ${toCurrency}`;
+                    document.getElementById('ewallet-currency').textContent = toCurrency;
+                    walletCurrency = toCurrency;  // Update walletCurrency
+                    originalCurrency = fromCurrency; // Track the original currency
+                } else {
+                    document.getElementById('convertedAmount').textContent = 'Conversion failed. Please try again.';
+                }
+            } catch (error) {
+                console.error('Error fetching conversion rate:', error);
+                document.getElementById('convertedAmount').textContent = 'Error converting currency. Please try again.';
+            }
+        });
+
+        document.getElementById('add-button').addEventListener('click', function() {
+            const convertedAmountText = document.getElementById('convertedAmount').textContent;
+            const convertedAmount = parseFloat(convertedAmountText.split(' ')[0].replace(/,/g, '')); // Remove commas
+
+            if (!isNaN(convertedAmount)) {
+                walletBalance += convertedAmount;
+                history.push(`Added: ${convertedAmount.toFixed(2)} ${walletCurrency}`);
+                updateWallet();
+            }
+        });
+
+        document.getElementById('withdraw-button').addEventListener('click', function() {
+            const withdrawAmount = parseFloat(document.getElementById('withdraw-amount').value);
+            
+            if (!isNaN(withdrawAmount) && withdrawAmount <= walletBalance) {
+                walletBalance -= withdrawAmount;
+                history.push(`Withdrew: ${withdrawAmount.toFixed(2)} ${walletCurrency}`);
+                updateWallet();
+            } else {
+                alert('Invalid amount or insufficient balance.');
+            }
+        });
+
+        document.getElementById('reset-button').addEventListener('click', async function() {
+            if (walletBalance > 0) {
+                // Convert walletBalance back to originalCurrency
+                const url = `https://fast-currency-convertor.p.rapidapi.com/api/Fetch-Currency/?amount=${walletBalance}&fromCurrency=${walletCurrency}&toCurrency=${originalCurrency}`;
+                const options = {
+                    method: 'GET',
+                    headers: {
+                        'x-rapidapi-key': '5a27b56f09msh98bca7eab65d29fp1a3a19jsn43275f875551',
+                        'x-rapidapi-host': 'fast-currency-convertor.p.rapidapi.com'
+                    }
+                };
+
+                try {
+                    const response = await fetch(url, options);
+                    const result = await response.json();  // Assuming the response is JSON
+
+                    if (result.status) {
+                        const revertedAmount = parseFloat(result.value.replace(/,/g, '')); // Remove commas
+                        history.push(`Reverted: ${walletBalance.toFixed(2)} ${walletCurrency} to ${revertedAmount.toFixed(2)} ${originalCurrency}`);
+                        walletBalance = 0;
+                        document.getElementById('ewallet-balance').textContent = walletBalance.toFixed(2);
+                        document.getElementById('ewallet-currency').textContent = originalCurrency;
+                        updateHistory();
+                    } else {
+                        alert('Failed to revert amount. Please try again.');
+                    }
+                } catch (error) {
+                    console.error('Error fetching conversion rate for reset:', error);
+                    alert('Error reverting balance. Please try again.');
+                }
+            } else {
+                alert('No balance to revert.');
+            }
+        });
+
+        document.getElementById('ewallet-button').addEventListener('click', function() {
+            const eWalletWindow = document.getElementById('ewallet-window');
+            eWalletWindow.classList.toggle('visible');
+        });
+
+        function updateWallet() {
+            document.getElementById('ewallet-balance').textContent = walletBalance.toFixed(2);
+            updateHistory();
+        }
+
+        function updateHistory() {
+            const historyList = document.getElementById('ewallet-history');
+            historyList.innerHTML = ''; // Clear existing history
+            history.forEach(item => {
+                const listItem = document.createElement('li');
+                listItem.textContent = item;
+                historyList.appendChild(listItem);
+            });
+        }
+    </script>
+</body>
+</html>
